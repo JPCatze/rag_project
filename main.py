@@ -33,29 +33,7 @@ def fetch_text(dict):
     list_doc = [f"{k}:{table['text'][v].as_py()}" for k, v in dict.items()]
     return list_doc
 
-
-@app.route("/chat")
-def main():
-
-    inputs = request.args.get("query")
-
-    if not inputs:
-        return jsonify({"error": "Missing conversation parameter"}), 400
-    
-    zip_dict = get_document(inputs)
-    list_doc = fetch_text(zip_dict)
-    top_doc = get_topdoc(inputs,list_doc)
-
-    messages = [
-    {
-        "role": "system",
-        "content": "You are a helpful assistant. Use the provided context to answer the user's question."
-    },
-    {
-        "role": "user",
-        "content": f"Context:\n{top_doc}\n\nQuestion:\n{inputs}"
-    }
-]
+def generate_response(messages):
     text = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -73,10 +51,45 @@ def main():
         top_p=0.8
     )
     output_ids = generated_ids[0][len(model_inputs.input_ids[0]):].tolist() 
+    return tokenizer.decode(output_ids, skip_special_tokens=True)
 
-    content  = tokenizer.decode(output_ids)
+@app.route("/chat")
+def main():
 
-    return jsonify({"response": content})
+    inputs = request.args.get("query")
+
+    if not inputs:
+        return jsonify({"error": "Missing conversation parameter"}), 400
+    
+    zip_dict = get_document(inputs)
+    list_doc = fetch_text(zip_dict)
+    top_doc = get_topdoc(inputs,list_doc)
+
+    messages_normal = [
+    {
+        "role": "system",
+        "content": "You are a helpful assistant."
+    },
+    {
+        "role": "user",
+        "content": f"Question:\n{inputs}"
+    }
+    ]
+    messages_rag = [
+    {
+        "role": "system",
+        "content": "You are a helpful assistant. Use the provided context to answer the user's question."
+    },
+    {
+        "role": "user",
+        "content": f"Context:\n{top_doc}\n\nQuestion:\n{inputs}"
+    }
+    ]
+
+    content_normal  = generate_response(messages_normal)
+    content_rag  = generate_response(messages_rag)
+
+    return jsonify({"response_no_rag": content_normal, "response_with_rag": content_rag})
 
 
 if __name__ == "__main__":
